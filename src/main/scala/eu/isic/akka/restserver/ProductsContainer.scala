@@ -60,7 +60,6 @@ object ActorApplication extends JsonSupport {
       implicit val timeout = Timeout(3 seconds)
       val pwd = (userActor ? GetPassword(id)).mapTo[String]
       val result = Await.result(pwd, 5 seconds)
-
       return result
     }
 
@@ -140,7 +139,7 @@ object ActorApplication extends JsonSupport {
                     complete(product)
                   } else complete("Product Not found. You have to enter a valid Product-ID ")
                 }
-              }, path("startPayment") {
+              }, path("selectDeliveryAdress") {
                 //selecting a delivery adress
                 (pathEnd & get) {
                   implicit val timeout = Timeout(3 seconds)
@@ -153,6 +152,7 @@ object ActorApplication extends JsonSupport {
                 //selecting a delivery adress
                 (pathEnd & post) {
                   implicit val timeout = Timeout(3 seconds)
+                  basketActor ! StartPayment
                   onSuccess((basketActor ? PaymentInProgressContainer(user, number, basketItems)).mapTo[startPaymentContainer]) { res =>
                     complete(PaidContainer(paid = res))
                   }
