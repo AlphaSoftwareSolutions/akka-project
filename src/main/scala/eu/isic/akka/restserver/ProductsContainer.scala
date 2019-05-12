@@ -1,6 +1,6 @@
 package eu.isic.akka.restserver
 
-import akka.actor.{Actor, ActorSystem, FSM, Props}
+import akka.actor.{ActorSystem, Props}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
@@ -9,9 +9,9 @@ import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import eu.isic.akka.data.BasketDatabase._
-import eu.isic.akka.data.ModelJsonFormats
-import eu.isic.akka.restserver.ProductDatabase.{Ok, _}
-import eu.isic.akka.restserver.UserDatabase._
+import eu.isic.akka.data.ProductDatabase.{Ok, _}
+import eu.isic.akka.data.UserDatabase._
+import eu.isic.akka.data.{BasketDatabase, JsonSupport, ProductDatabase, UserDatabase}
 
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationDouble
@@ -20,163 +20,16 @@ case class Price(number: Double, currency: String)
 
 case class Product(id: Int, name: String, price: Price, description: String, itemsLeft: Int)
 
-case class Basket(id: Int)
-
 case class DeliveryAdress(id: Int, street: String, postcode: Int, city: String)
 
 case class User(id: String, pwd: String, name: String, surname: String, adresses: List[DeliveryAdress], bankAccount: String)
 
-
-//object DeliveryAdress {
-//  var DELIVERYADRESS_LIST = List.empty[DeliveryAdress]
-//}
 
 object User {
   var USER_LIST = List {
     User("edib.isic@gmail.com", "secret", "Edib", "Isic", (List(DeliveryAdress(1, "Lerchenauerstr.146a", 80935, "München"), (DeliveryAdress(2, "Feldmochingerstraße 212", 80995, "München")))), "DE5893329493249423949")
   }
 }
-
-//case class UserContainer(user: User)
-
-//case class UsersContainer(users: List[User])
-
-class UserDatabase extends Actor {
-  override def receive: Receive = {
-    case Register(user) =>
-      val duplicateEmail = User.USER_LIST.find(_.id == user.id)
-      if (duplicateEmail.isDefined) {
-        this.sender() ! NotOk2
-      } else {
-        UserContainer(User.USER_LIST)
-        User.USER_LIST ::= user
-        this.sender() ! Ok2
-      }
-    case GetAllUsers =>
-      this.sender() ! UserContainer(User.USER_LIST)
-
-    case GetUser(user) =>
-      val customer = User.USER_LIST.find(_.id == user)
-      customer.foreach { user =>
-        if (customer.isDefined) {
-          this.sender() ! user
-        }
-        else this.sender() ! " Not found"
-      }
-    case GetPassword(id) =>
-      val customer = User.USER_LIST.find(_.id == id)
-      customer.foreach { user =>
-        if (customer.isDefined) {
-          this.sender() ! user.pwd
-        }
-        else this.sender() ! " Not found"
-      }
-    case AddDeliveryAdress(user, a) =>
-      val customer = User.USER_LIST.find(_.id == user)
-      customer.foreach { user =>
-        if (customer.isDefined) {
-          User.USER_LIST ::= a
-
-        }
-        //          user.adresses ::= a
-        //        this.sender() ! Ok2
-
-        else this.sender() ! "Could not process new delivery Adress"
-
-      }
-
-  }
-}
-
-object UserDatabase {
-
-  case class GetPassword(pwd: String)
-
-  case class GetUser(id: String)
-
-  case class Register(user: User)
-
-  case class GetLoggedInUser(user: User)
-
-  case object GetAllUsers
-
-  case class AddDeliveryAdress(user: String, deliveryAdress: DeliveryAdress)
-
-  case class AdressContainer(adresses: List[DeliveryAdress])
-
-  case class UserContainer(users: List[User])
-
-  sealed trait UserDatabaseResponse
-
-  case object Ok2 extends UserDatabaseResponse
-
-  case object NotOk2 extends UserDatabaseResponse
-
-}
-
-//class Basket extends FSM[BasketState, BasketData]{
-////  when(Unpaid){
-////    case Event(AddTo, stateData)
-////  }
-//  startWith(Unpaid, BasketDataContainer(items = List.empty))
-//}
-
-//object Basket {
-//  var BASKET_LIST = List.empty[Product]
-//}
-
-
-class BasketDatabase extends FSM[BasketState, BasketData] {
-  //  private var basketList = List.empty[Product]
-  private var adressList = List.empty[DeliveryAdress]
-  private var orderId = 1
-
-  when(Unpaid) {
-    case Event(AddToBasket(product), container: BasketContainer) =>
-      stay() using container.copy(product :: container.products)
-    case Event(SelectDeliveryAdress(user), _) =>
-      val loggedUser = User.USER_LIST.find(_.id == user)
-      if (loggedUser.isDefined) loggedUser.foreach { user =>
-        user.adresses.foreach { deliverAdress =>
-          adressList ::= deliverAdress
-        }
-      }
-      this.sender() ! AdressList(adressList)
-      goto(PaymentInProgress)
-  }
-  when(PaymentInProgress) {
-    case Event(PaymentDone, _) =>
-      this.sender() ! (orderId += 1)
-      goto(Paid)
-  }
-  when(Paid) {
-    case _ => stay()
-  }
-  whenUnhandled {
-    case Event(GetBasketInformation, container: BasketContainer) =>
-      this.sender() ! BasketContainer(products = container.products)
-      stay()
-    case Event(msg, _) =>
-      println(s"Cannot handle $msg in ${this.stateName}")
-      stay()
-  }
-  onTransition {
-    case x -> y =>
-      println(s"Going from $x to $y")
-  }
-
-  startWith(Unpaid, BasketContainer(products = List.empty))
-
-  //  override def receive: Receive = {
-  ////    case AddToBasket123(p) =>
-  //////      basketList ::= p
-  ////      this.sender() ! Ok1
-  //    case GetBasketInformation =>
-  //      this.sender() ! BasketContainer(basketList)
-
-  //    }
-}
-
 
 object Product {
   var PRODUCT_LIST = List(
@@ -188,46 +41,17 @@ object Product {
   )
 }
 
-class ProductDatabase extends Actor {
-
-  //  private var productList = List.empty[Product]
-
-  override def receive = {
-    case AddProduct(p) =>
-      Product.PRODUCT_LIST ::= p
-      this.sender() ! Ok
-    case GetProducts =>
-      this.sender() ! ProductContainer(Product.PRODUCT_LIST)
-  }
-}
-
-object ProductDatabase {
-
-  sealed trait ProductDatabaseCommand
-
-  case class AddProduct(product: Product) extends ProductDatabaseCommand
-
-  case class ProductContainer(products: List[Product])
-
-  case object GetProducts extends ProductDatabaseCommand
-
-  sealed trait ProductDatabaseResponse
-
-  case object Ok extends ProductDatabaseResponse
-
-}
-
-
-object ActorApplication extends ModelJsonFormats {
+object ActorApplication extends JsonSupport {
 
   def main(args: Array[String]): Unit = {
+
     implicit val timeout = Timeout(5 seconds)
 
     implicit val system = ActorSystem()
     implicit val materializer = ActorMaterializer()
     implicit val ec = system.dispatcher
 
-
+    var basketItems = List.empty[Product]
     val dbActor = system.actorOf(Props(classOf[ProductDatabase]))
     val basketActor = system.actorOf(Props(classOf[BasketDatabase]))
     val userActor = system.actorOf(Props(classOf[UserDatabase]))
@@ -286,34 +110,6 @@ object ActorApplication extends ModelJsonFormats {
             }
           )
         } ~
-        //        Route.seal {
-        //          pathPrefix("secured") {
-        //            authenticateBasic(realm = "secure site", myUserPassAuthenticator) { user =>
-        //              path(Segment) { segment =>
-        //                var user = User.USER_LIST.find(_.id == segment)
-        //                if (user.isDefined)
-        //                  complete(s"Hi '$user' you logged in")
-        //                else complete(s"login failed Please register at ${"users" / "register"}")
-        //              }~ path("basketActor") {
-        //                (pathEnd & get) {
-        //                  implicit val timeout = Timeout(3 seconds)
-        //                  onSuccess((basketActor ? GetBasketProducts).mapTo[BasketList]) { res =>
-        //                    complete(BasketContainer(products = res.products))
-        //                          }~ (path("add" / IntNumber) & post) { number =>
-        //                            val product = Product.PRODUCT_LIST.find(_.id == number)
-        //                            if (product.isDefined) {
-        //                              product.foreach { product =>
-        //                                basketActor ! AddProductToBasket(product)
-        //                                //            complete(Basket.BASKET_LIST ::= product)
-        //                              }
-        //                              complete(product)
-        //                            } else complete("Not found")
-        //                          }
-        //                }
-        //              }
-        //            }
-        //          }
-        //      }
         pathPrefix("secured") {
           authenticateBasic(realm = "secure site", myUserPassAuthenticator) { user =>
             concat(
@@ -338,6 +134,7 @@ object ActorApplication extends ModelJsonFormats {
                   val product = Product.PRODUCT_LIST.find(_.id == number)
                   if (product.isDefined) {
                     product.foreach { product =>
+                      basketItems ::= product
                       basketActor ! AddToBasket(product)
                     }
                     complete(product)
@@ -347,20 +144,29 @@ object ActorApplication extends ModelJsonFormats {
                 //selecting a delivery adress
                 (pathEnd & get) {
                   implicit val timeout = Timeout(3 seconds)
-                  onSuccess((basketActor ? SelectDeliveryAdress(user)).mapTo[AdressList]) { res =>
+                  onSuccess((userActor ? SelectDeliveryAdress(user)).mapTo[AdressContainer]) { res =>
                     complete(AdressContainer(adresses = res.adresses))
                   }
                 }
               },
+              path("paid" / IntNumber) { number =>
+                //selecting a delivery adress
+                (pathEnd & post) {
+                  implicit val timeout = Timeout(3 seconds)
+                  onSuccess((basketActor ? PaymentInProgressContainer(user, number, basketItems)).mapTo[startPaymentContainer]) { res =>
+                    complete(PaidContainer(paid = res))
+                  }
+                }
+              },
+
               (path("addDeliveryAdress") & post) {
                 entity(as[DeliveryAdress]) { a =>
                   implicit val timeout = Timeout(3 seconds)
                   onSuccess((userActor ? AddDeliveryAdress(user, a)).mapTo[UserDatabaseResponse]) {
-                    case Ok2 => complete("New Delivery Adress Added")
-                    case _ => complete("Failed")
+                    case Ok2 => complete(s"New ${a} Adress Added")
+                    case _ => complete("Failed to Add Adress")
                   }
                 }
-
               },
               path("user") {
                 (pathEnd & get) {
