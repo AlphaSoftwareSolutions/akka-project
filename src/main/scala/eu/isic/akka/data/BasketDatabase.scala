@@ -14,9 +14,9 @@ object BasketDatabase {
 
   case class PaidContainer(paid: startPaymentContainer) extends BasketData
 
-  sealed trait BasketCommand {}
-
   sealed trait BasketState {}
+
+  sealed trait BasketCommand {}
 
   case class AddToBasket(product: Product) extends BasketCommand
 
@@ -26,17 +26,15 @@ object BasketDatabase {
 
   case object PaymentDone extends BasketCommand
 
-  case class PaymentInProgressContainer(id: String, number: Int, products: List[Product]) extends BasketState
+  case class startPaymentContainer(orderId: Int, productsInBasket: List[Product], deliveryAdress: DeliveryAdress) extends BasketData
 
-  case class startPaymentContainer(orderId: Int, basketList: List[Product], deliveryAdress: DeliveryAdress) extends BasketData
+  case class PaymentInProgressContainer(id: String, number: Int, products: List[Product]) extends BasketState
 
   case object Paid extends BasketState
 
   case object PaymentInProgress extends BasketState
 
   case object Unpaid extends BasketState
-
-  case class BasketInformation(amount: Int)
 
   sealed trait BasketResponse
 
@@ -47,9 +45,6 @@ object BasketDatabase {
 
 class BasketDatabase extends FSM[BasketState, BasketData] {
   private var orderId = 100
-  private var deliveryAdr = List.empty[DeliveryAdress]
-  private var basketItems = List.empty[BasketContainer]
-  private var paidC = List.empty[PaidContainer]
 
   when(Unpaid) {
     case Event(AddToBasket(product), container: BasketContainer) =>
@@ -58,8 +53,6 @@ class BasketDatabase extends FSM[BasketState, BasketData] {
       goto(PaymentInProgress)
   }
   when(PaymentInProgress) {
-
-
     case Event(PaymentInProgressContainer(user, number, products), _) =>
       val customer = User.USER_LIST.find(_.id == user)
       if (customer.isDefined) {
@@ -69,10 +62,8 @@ class BasketDatabase extends FSM[BasketState, BasketData] {
               this.sender() ! startPaymentContainer(orderId, products, adre)
 
             } else {
-              this.sender() ! startPaymentContainer(orderId, products, adre)
 
             }
-            this.sender() ! startPaymentContainer(orderId, products, adre)
 
           }
         }
@@ -105,7 +96,6 @@ class BasketDatabase extends FSM[BasketState, BasketData] {
     case x -> y =>
       println(s"Going from $x to $y")
   }
-
   startWith(Unpaid, BasketContainer(products = List.empty))
 
 }

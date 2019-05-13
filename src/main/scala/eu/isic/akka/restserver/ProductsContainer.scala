@@ -24,7 +24,6 @@ case class DeliveryAdress(id: Int, street: String, postcode: Int, city: String)
 
 case class User(id: String, pwd: String, name: String, surname: String, adresses: List[DeliveryAdress], bankAccount: String)
 
-
 object User {
   var USER_LIST = List {
     User("edib.isic@gmail.com", "secret", "Edib", "Isic", (List(DeliveryAdress(1, "Lerchenauerstr.146a", 80935, "München"), (DeliveryAdress(2, "Feldmochingerstraße 212", 80995, "München")))), "DE5893329493249423949")
@@ -117,11 +116,9 @@ object ActorApplication extends JsonSupport {
                   complete(s"User $user Authenticated OK")
                 }
               },
-
               path("basketActor") {
                 (pathEnd & get) {
                   implicit val timeout = Timeout(3 seconds)
-                  //                  (basketActor ? GetBasketInformation).foreach(println)
                   onSuccess((basketActor ? GetBasketInformation).mapTo[BasketContainer]) { res =>
                     complete(BasketContainer(products = res.products))
                   }
@@ -129,6 +126,7 @@ object ActorApplication extends JsonSupport {
               },
               path("addToBasket" / IntNumber) { number =>
                 post {
+                  basketActor ! Unpaid
                   implicit val timeout = Timeout(3 seconds)
                   val product = Product.PRODUCT_LIST.find(_.id == number)
                   if (product.isDefined) {
@@ -158,7 +156,6 @@ object ActorApplication extends JsonSupport {
                   }
                 }
               },
-
               (path("addDeliveryAdress") & post) {
                 entity(as[DeliveryAdress]) { a =>
                   implicit val timeout = Timeout(3 seconds)
@@ -168,7 +165,7 @@ object ActorApplication extends JsonSupport {
                   }
                 }
               },
-              path("user") {
+              path("userInfo") {
                 (pathEnd & get) {
                   implicit val timeout = Timeout(3 seconds)
                   onSuccess((userActor ? GetUser(user)).mapTo[User]) { res =>
